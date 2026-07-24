@@ -1,0 +1,146 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<link rel="stylesheet" href="../style.css" type="text/css" >
+<title>v.tonlesap.model</title>
+</head>
+<body>
+<h2>NAME</h2>
+v.tonlesap.model - Multi-criteria pairwise-comparison outranking model for site suitability of Tonle Sap villages
+
+<h2>KEYWORDS</h2>
+vector, multi-criteria, outranking, suitability
+
+<h2>SYNOPSIS</h2>
+<b>v.tonlesap.model</b><br>
+<b>v.tonlesap.model</b> <b>-d</b>
+ [<b>input</b>=<i>name</i>]
+ <b>output</b>=<i>name</i>
+ <b>sector</b>=<i>irrigation|aquaculture|potable</i>
+ [<b>crit1</b>=<i>integer</i>] [<b>crit2</b>=<i>integer</i>] [<b>crit3</b>=<i>integer</i>]
+ <b>weights</b>=<i>float,float,float</i>
+ <b>better</b>=<i>m|l,m|l,m|l</i>
+ [<b>screening</b>=<i>column,operator,threshold[,...]</i>]
+ [<b>score_column</b>=<i>string</i>]
+
+<h3>Flags</h3>
+<dl>
+<dt><b>-d</b></dt>
+<dd>Ignore <b>input=</b>, import the bundled Tonle Sap demonstration dataset for <b>sector=</b> instead</dd>
+</dl>
+
+<h2>DESCRIPTION</h2>
+
+<p>
+<em>v.tonlesap.model</em> implements a multi-criteria pairwise-comparison
+outranking model to score the suitability of Tonle Sap (Cambodia) villages
+for one of three sectors: <b>irrigation</b>, <b>aquaculture</b> or
+<b>potable water</b>. It is a native GRASS vector port of the standalone
+<a href="https://github.com/YannChemin/TSAPMODEL">TSAPMODEL</a> scripts
+(<tt>TLI.py</tt>, <tt>TLA.py</tt>, <tt>TLP.py</tt>), written for IWMI.
+
+<p>
+The module reads three attribute columns (the <em>outranking criteria</em>)
+from the <b>input</b> vector points map, compares every pair of villages
+for each criterion, and accumulates a signed score per village weighted by
+<b>weights</b> and the <b>better</b> direction (<em>more is better</em> or
+<em>less is better</em>). The result is rescaled to 0-1 and written to a
+new <b>score_column</b> (default <tt>tsap_score</tt>) in <b>output</b>.
+
+<p>
+An optional <b>screening</b> step removes villages that do not satisfy one
+or more threshold conditions (e.g. <tt>TOPOZONE,le,3</tt>) from the
+<em>output</em> map &mdash; screening does not affect how the score itself
+is computed, it only filters which villages appear in the final result,
+matching the behaviour of the original scripts.
+
+<h3>Criteria selection</h3>
+
+<p>Which attribute columns are used depends on <b>sector</b>:
+
+<ul>
+<li><b>irrigation</b> (all three required):
+  <ul>
+  <li><tt>crit1</tt>: 0=MA_INDACT, 1=MA_PROXROAD</li>
+  <li><tt>crit2</tt>: 0=TAGAP_DRY, 1=TAGAP_WET</li>
+  <li><tt>crit3</tt>: 0=SW_PROXRIV, 1=SW_PONDS, 2=GW_DWELL, 3=GW_BOREW, 4=IRRI_SCH, 5=IRRI_HEAD</li>
+  </ul>
+</li>
+<li><b>aquaculture</b> (crit1/crit2 required, crit3 ignored):
+  <ul>
+  <li><tt>crit1</tt>: 0=MA_INDACT, 1=MA_PROXROAD</li>
+  <li><tt>crit2</tt>: 0=SW_PROXRIV, 1=SW_PONDS</li>
+  <li>3rd criterion is always FISHPRO (compulsory)</li>
+  </ul>
+</li>
+<li><b>potable</b> (crit1/crit2/crit3 ignored, always uses all three):
+  WA_AWAY, WS_UNSAFE, WT_UNTREAT
+</li>
+</ul>
+
+<p>
+<b>weights</b> and <b>better</b> always take exactly 3 comma-separated
+values, in the same order as the resolved criteria above.
+
+<h3>Demonstration dataset</h3>
+
+<p>
+The addon ships the original TSAPMODEL <tt>tablefile.csv</tt> for each
+sector (surveyed in <em>Indian 1960 / UTM zone 48N</em>, EPSG:3148). Pass
+the <b>-d</b> flag to import the bundled dataset for the chosen
+<b>sector</b> on the fly and use it as input instead of <b>input=</b>
+&mdash; this recreates the original demonstration mapping without needing
+any external data. The current GRASS project must be in EPSG:3148 (create
+one with <tt>grass -c EPSG:3148 &lt;GISDBASE&gt;/&lt;project&gt; -e</tt> if
+needed).
+
+<h2>NOTES</h2>
+
+<p>
+The pairwise comparison is O(n^2) per criterion (n = number of input
+features), vectorised with NumPy. Very large village counts will still be
+slow; consider pre-filtering the input vector if performance becomes an
+issue.
+
+<h2>EXAMPLES</h2>
+
+<p>Reproduce the original TLI.py self-test (irrigation, proxroad + wet +
+proxriv) using the bundled demonstration dataset:
+
+<div class="code"><pre>
+grass -c EPSG:3148 ~/grassdata/tonlesap_demo -e
+grass ~/grassdata/tonlesap_demo/PERMANENT --exec \
+  v.tonlesap.model -d sector=irrigation output=irrigation_score \
+  crit1=0 crit2=1 crit3=0 weights=1.0,1.0,1.0 better=m,l,l
+</pre></div>
+
+<p>Run the aquaculture model on an existing vector, screening out villages
+above elevation 5 and with TOPOZONE greater than 3:
+
+<div class="code"><pre>
+v.tonlesap.model input=villages output=aqua_score sector=aquaculture \
+  crit1=0 crit2=1 weights=1.0,1.0,1.0 better=m,l,m \
+  screening=ELEVATION,ge,5,TOPOZONE,le,3
+</pre></div>
+
+<p>Run the potable-water model (fixed 3-column criteria set, no crit1/2/3):
+
+<div class="code"><pre>
+v.tonlesap.model input=villages output=potable_score sector=potable \
+  weights=1.0,1.0,1.0 better=m,m,l
+</pre></div>
+
+<h2>SEE ALSO</h2>
+<em><a href="v.extract.html">v.extract</a></em>,
+<em><a href="v.db.select.html">v.db.select</a></em>,
+<em><a href="v.in.ascii.html">v.in.ascii</a></em>
+
+<h2>AUTHORS</h2>
+Yann Chemin
+<p>
+Original TSAPMODEL: <a href="https://github.com/YannChemin/TSAPMODEL">github.com/YannChemin/TSAPMODEL</a>
+
+</body>
+</html>

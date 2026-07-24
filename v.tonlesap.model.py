@@ -299,11 +299,16 @@ def read_columns(vector_map, columns):
     if not cats:
         gs.fatal(_("Input vector <%s> has no records") % vector_map)
 
+    def to_float(value):
+        if value is None or value == "":
+            return float("nan")
+        return float(value)
+
     arrays = {}
     for col in columns:
         idx = col_index[col]
         arrays[col] = np.array(
-            [float(sel["values"][cat][idx]) for cat in cats], dtype=float
+            [to_float(sel["values"][cat][idx]) for cat in cats], dtype=float
         )
     return [int(c) for c in cats], arrays
 
@@ -314,11 +319,16 @@ def pairwise_score(vals, weight, less_is_better):
     comparison (assignvpwc called for every ordered village pair). The
     triple loop recomputed the value range on every call (O(n^3)); this
     replaces it with one O(n^2) broadcasted computation with identical
-    per-pair semantics.
+    per-pair semantics, including the original's silent skip of pairs
+    touching a missing (NULL/NaN) value via nan-aware min/max/sum.
     """
     import numpy as np
 
-    valrange = vals.max() - vals.min()
+    if np.all(np.isnan(vals)):
+        gs.warning(_("Criterion has no valid values, skipping it"))
+        return np.zeros(len(vals))
+
+    valrange = np.nanmax(vals) - np.nanmin(vals)
     if valrange == 0:
         gs.warning(_("Criterion is constant across all features, skipping it"))
         return np.zeros(len(vals))
@@ -327,8 +337,8 @@ def pairwise_score(vals, weight, less_is_better):
     pos = np.clip(diff, 0, None)
     neg = np.clip(diff, None, 0)
     if less_is_better:
-        return pos.sum(axis=1) + neg.sum(axis=0)
-    return neg.sum(axis=1) + pos.sum(axis=0)
+        return np.nansum(pos, axis=1) + np.nansum(neg, axis=0)
+    return np.nansum(neg, axis=1) + np.nansum(pos, axis=0)
 
 
 def main():

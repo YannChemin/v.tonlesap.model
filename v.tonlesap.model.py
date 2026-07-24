@@ -285,6 +285,7 @@ def import_demo(sector):
 
     columns = ",".join("%s %s" % (name, column_types[name]) for name in header)
     tmp_map = gs.tempname(12)
+    _TEMP_MAPS.append(tmp_map)
     gs.run_command(
         "v.in.ascii",
         input=tmp_csv,

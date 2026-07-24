@@ -416,6 +416,8 @@ def main():
 
     tmp_map = gs.tempname(12)
     target = tmp_map if screening else output_map
+    if screening:
+        _TEMP_MAPS.append(tmp_map)
 
     gs.run_command("g.copy", vector=[input_map, target], overwrite=gs.overwrite(), quiet=True)
     gs.run_command(

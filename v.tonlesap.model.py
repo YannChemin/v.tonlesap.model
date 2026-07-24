@@ -185,7 +185,7 @@ def parse_screening(raw):
 
 
 def demo_csv_path(sector):
-    etc_dir = os.path.join(gs.gisenv()["GISBASE"], "etc", "v.tonlesap.model", "data", sector)
+    etc_dir = os.path.join(os.environ["GISBASE"], "etc", "v.tonlesap.model", "data", sector)
     path = os.path.join(etc_dir, "tablefile.csv")
     if not os.path.exists(path):
         gs.fatal(_("Bundled demonstration dataset not found at <%s>") % path)
@@ -194,7 +194,7 @@ def demo_csv_path(sector):
 
 def import_demo(sector):
     """Import the bundled demonstration CSV for sector into a temporary vector."""
-    proj_epsg = gs.parse_command("g.proj", flags="g").get("srid", "")
+    proj_epsg = gs.parse_command("g.proj", format="shell").get("srid", "")
     if DEMO_EPSG not in proj_epsg:
         gs.fatal(
             _(

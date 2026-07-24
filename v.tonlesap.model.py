@@ -103,11 +103,24 @@ SPDX-License-Identifier: Unlicense
 #% description: Ignore input=, import the bundled Tonle Sap demonstration dataset for sector= instead
 #%end
 
+import atexit
 import csv
 import os
 import sys
 
 import grass.script as gs
+
+_TEMP_MAPS = []
+
+
+def _cleanup():
+    for name in _TEMP_MAPS:
+        gs.run_command(
+            "g.remove", type="vector", name=name, flags="f", quiet=True, errors="ignore"
+        )
+
+
+atexit.register(_cleanup)
 
 # Criteria choice groups, by attribute column name (mirrors the mutually
 # exclusive crit1/crit2/crit3 choices of the original TLI.py/TLA.py).

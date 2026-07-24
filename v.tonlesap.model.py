@@ -194,7 +194,7 @@ def demo_csv_path(sector):
 
 def import_demo(sector):
     """Import the bundled demonstration CSV for sector into a temporary vector."""
-    proj_epsg = gs.parse_command("g.proj", format="shell").get("srid", "")
+    proj_epsg = gs.parse_command("g.proj", flags="p", format="shell").get("srid", "")
     if DEMO_EPSG not in proj_epsg:
         gs.fatal(
             _(

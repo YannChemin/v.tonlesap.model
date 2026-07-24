@@ -192,6 +192,61 @@ def demo_csv_path(sector):
     return path
 
 
+def _clean_demo_csv(csv_path):
+    """
+    Prepare the bundled CSV for v.in.ascii: it mixes numeric fields with a
+    few textual ones (village names, Yes/No flags, "NA" for missing data)
+    that np.genfromtxt in the original TL*.py scripts silently coerced to
+    NaN. Yes/No become 1/0 so the corresponding criterion (e.g. IRRI_HEAD)
+    is actually usable; NA becomes an empty (NULL) field; any column that
+    still holds non-numeric text (e.g. VILLNAME) is imported as text.
+    Returns (cleaned_csv_path, header, column_types).
+    """
+    with open(csv_path, newline="", encoding="utf-8") as fh:
+        rows = list(csv.reader(fh))
+    header = rows[0]
+    data_rows = rows[1:]
+
+    bool_map = {"yes": "1", "no": "0"}
+    cleaned_rows = []
+    for row in data_rows:
+        cleaned = []
+        for value in row:
+            v = value.strip()
+            low = v.lower()
+            if low in bool_map:
+                cleaned.append(bool_map[low])
+            elif low in ("na", ""):
+                cleaned.append("")
+            else:
+                cleaned.append(v)
+        cleaned_rows.append(cleaned)
+
+    text_cols = set()
+    for col_idx, name in enumerate(header):
+        for row in cleaned_rows:
+            value = row[col_idx]
+            if value == "":
+                continue
+            try:
+                float(value)
+            except ValueError:
+                text_cols.add(name)
+                break
+
+    tmp_csv = gs.tempfile()
+    with open(tmp_csv, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(header)
+        writer.writerows(cleaned_rows)
+
+    column_types = {
+        name: ("varchar(64)" if name in text_cols else "double precision")
+        for name in header
+    }
+    return tmp_csv, header, column_types
+
+
 def import_demo(sector):
     """Import the bundled demonstration CSV for sector into a temporary vector."""
     proj_epsg = gs.parse_command("g.proj", flags="p", format="shell").get("srid", "")
@@ -207,8 +262,7 @@ def import_demo(sector):
         )
 
     csv_path = demo_csv_path(sector)
-    with open(csv_path, newline="", encoding="utf-8") as fh:
-        header = next(csv.reader(fh))
+    tmp_csv, header, column_types = _clean_demo_csv(csv_path)
 
     try:
         x_idx = header.index("XCOOR") + 1
@@ -216,11 +270,11 @@ def import_demo(sector):
     except ValueError:
         gs.fatal(_("Bundled dataset <%s> has no XCOOR/YCOOR columns") % csv_path)
 
-    columns = ",".join("%s double precision" % name for name in header)
+    columns = ",".join("%s %s" % (name, column_types[name]) for name in header)
     tmp_map = gs.tempname(12)
     gs.run_command(
         "v.in.ascii",
-        input=csv_path,
+        input=tmp_csv,
         output=tmp_map,
         format="point",
         separator="comma",
